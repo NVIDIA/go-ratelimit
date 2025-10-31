@@ -515,50 +515,82 @@ func TestConcurrentAccess(t *testing.T) {
 
 // TestSlidingWindow tests sliding window algorithm
 func TestSlidingWindow(t *testing.T) {
+	// Use mock clock for deterministic testing
+	clock := &mockClock{currentTime: time.Now()}
 	limiter := &SlidingWindowLimiter{
 		limit:    5,
 		window:   100 * time.Millisecond,
 		requests: make(map[string][]time.Time),
+		clock:    clock,
 	}
 
 	ctx := context.Background()
 	key := "test-key"
 
 	// Make 5 requests - all should be allowed
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if !limiter.AllowRequest(ctx, key) {
 			t.Errorf("Request %d should be allowed", i+1)
 		}
-		time.Sleep(10 * time.Millisecond)
+		clock.Advance(10 * time.Millisecond)
 	}
+	// t = t_0 + 50ms
 
 	// 6th request should be denied
 	if limiter.AllowRequest(ctx, key) {
 		t.Error("6th request should be denied")
 	}
 
-	// Wait for window to slide
-	time.Sleep(60 * time.Millisecond)
+	// Advance time so oldest request (at t_0) slides out of 100ms window
+	clock.Advance(60 * time.Millisecond)
+	// t = t_0 + 110ms, window is [t_0 + 10ms, t_0 + 110ms]
 
 	// Should allow one more request as oldest one slides out
 	if !limiter.AllowRequest(ctx, key) {
+		t.Logf("Current time: %v", clock.Now())
+		t.Logf("Requests in window: %v", limiter.requests[key])
 		t.Error("Request should be allowed after window slides")
 	}
 
-	// But not two
+	// But not two - we have 5 in window again
 	if limiter.AllowRequest(ctx, key) {
+		t.Logf("Current time: %v", clock.Now())
+		t.Logf("Requests in window: %v", limiter.requests[key])
 		t.Error("Request should be denied - limit still reached")
 	}
 
 	// Wait for complete window reset
-	time.Sleep(150 * time.Millisecond)
+	clock.Advance(150 * time.Millisecond)
 
 	// Should allow 5 requests again
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if !limiter.AllowRequest(ctx, key) {
 			t.Errorf("Request %d should be allowed after window reset", i+1)
 		}
 	}
+}
+
+// timeProvider allows injecting time for testing
+type timeProvider interface {
+	Now() time.Time
+}
+
+// mockClock provides controllable time for testing
+type mockClock struct {
+	mu          sync.Mutex
+	currentTime time.Time
+}
+
+func (m *mockClock) Now() time.Time {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.currentTime
+}
+
+func (m *mockClock) Advance(d time.Duration) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.currentTime = m.currentTime.Add(d)
 }
 
 // SlidingWindowLimiter implements sliding window algorithm
@@ -567,13 +599,14 @@ type SlidingWindowLimiter struct {
 	limit    int
 	window   time.Duration
 	requests map[string][]time.Time
+	clock    timeProvider
 }
 
 func (l *SlidingWindowLimiter) AllowRequest(ctx context.Context, key string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	now := time.Now()
+	now := l.clock.Now()
 	windowStart := now.Add(-l.window)
 
 	// Get existing requests
@@ -583,10 +616,11 @@ func (l *SlidingWindowLimiter) AllowRequest(ctx context.Context, key string) boo
 		return true
 	}
 
-	// Remove expired requests
+	// Remove expired requests (keep requests >= windowStart)
 	validRequests := []time.Time{}
 	for _, ts := range timestamps {
-		if ts.After(windowStart) {
+		// Use >= comparison: request at exactly windowStart is still valid
+		if !ts.Before(windowStart) {
 			validRequests = append(validRequests, ts)
 		}
 	}
