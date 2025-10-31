@@ -28,11 +28,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/NVIDIA/go-ratelimit/pkg/config"
 	"github.com/NVIDIA/go-ratelimit/pkg/limiter"
 	"github.com/NVIDIA/go-ratelimit/pkg/middleware"
 	"github.com/NVIDIA/go-ratelimit/pkg/ratelimit"
+	"github.com/NVIDIA/go-ratelimit/pkg/testutil"
+	"github.com/redis/go-redis/v9"
 )
 
 // =============================================================================
@@ -40,9 +41,7 @@ import (
 // =============================================================================
 
 func setupTestRedis(t *testing.T) *redis.Client {
-	client := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
-	})
+	client := testutil.NewTestRedisClientDefault()
 
 	ctx := context.Background()
 	if err := client.Ping(ctx).Err(); err != nil {

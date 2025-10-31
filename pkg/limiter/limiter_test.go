@@ -25,9 +25,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/redis/go-redis/v9"
-	"github.com/stretchr/testify/assert"
 	"github.com/NVIDIA/go-ratelimit/pkg/config"
+	"github.com/NVIDIA/go-ratelimit/pkg/testutil"
+	"github.com/stretchr/testify/assert"
 )
 
 // TestHelpers contains helper functions for testing limiters
@@ -57,10 +57,7 @@ func TestConcurrentRateLimiting(t *testing.T) {
 	}
 
 	// Connect to Redis for testing
-	rdb := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
-		DB:   15, // Use test database
-	})
+	rdb := testutil.NewTestRedisClient("localhost:6379", 15)
 
 	ctx := context.Background()
 	if err := rdb.Ping(ctx).Err(); err != nil {
@@ -306,7 +303,13 @@ func TestRaceConditions(t *testing.T) {
 	// Run with: go test -race ./pkg/limiter
 
 	mockRedis := NewMockRedisClient()
-	rdb := redis.NewClient(&redis.Options{})
+	rdb := testutil.NewTestRedisClientDefault()
+
+	ctx := context.Background()
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		t.Skip("Redis not available, skipping race condition test")
+	}
+	defer rdb.Close()
 
 	keyBuilder := func(r *http.Request) string {
 		return "race-test"
@@ -364,7 +367,14 @@ func TestMemoryLeaks(t *testing.T) {
 		t.Skip("Skipping memory leak test in short mode")
 	}
 
-	rdb := redis.NewClient(&redis.Options{})
+	rdb := testutil.NewTestRedisClientDefault()
+
+	ctx := context.Background()
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		t.Skip("Redis not available, skipping memory leak test")
+	}
+	defer rdb.Close()
+
 	keyBuilder := func(r *http.Request) string {
 		return "memory-test"
 	}
@@ -374,7 +384,6 @@ func TestMemoryLeaks(t *testing.T) {
 	dualLimiter := NewDualLimiter(rdb, "test", 1000, 10*1048576, time.Minute, keyBuilder)
 	dynamicLimiter := NewDynamicLimiter(rdb, "test", 1000, 10*1048576, time.Minute, keyBuilder)
 
-	ctx := context.Background()
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 
 	// Simulate heavy usage
@@ -421,7 +430,14 @@ func TestMemoryLeaks(t *testing.T) {
 
 // BenchmarkComparison compares performance of different limiters
 func BenchmarkComparison(b *testing.B) {
-	rdb := redis.NewClient(&redis.Options{})
+	rdb := testutil.NewTestRedisClientDefault()
+
+	ctx := context.Background()
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		b.Skip("Redis not available, skipping benchmark")
+	}
+	defer rdb.Close()
+
 	keyBuilder := func(r *http.Request) string {
 		return "bench-compare"
 	}

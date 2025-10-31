@@ -24,10 +24,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/go-ratelimit/pkg/config"
+	"github.com/NVIDIA/go-ratelimit/pkg/testutil"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/NVIDIA/go-ratelimit/pkg/config"
 )
 
 func TestDynamicLimiter_NewDynamicLimiter(t *testing.T) {
@@ -438,10 +439,7 @@ func TestDynamicLimiter_Integration(t *testing.T) {
 	}
 
 	// Connect to actual Redis
-	rdb := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
-		DB:   15, // Use test database
-	})
+	rdb := testutil.NewTestRedisClient("localhost:6379", 15)
 
 	// Check if Redis is available
 	ctx := context.Background()
