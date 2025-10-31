@@ -17,7 +17,6 @@ package limiter
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"sync"
@@ -76,11 +75,11 @@ func (m *MockRedisClient) simulateOperation(op string) error {
 	}
 
 	if m.shouldFail {
-		return errors.New("redis: connection failed")
+		return fmt.Errorf("mock: simulated failure")
 	}
 
 	if m.failAfter > 0 && m.callCount > m.failAfter {
-		return errors.New("redis: connection failed after n calls")
+		return fmt.Errorf("mock: simulated failure after %d calls", m.failAfter)
 	}
 
 	return nil
@@ -714,4 +713,148 @@ func TestKeyFunction(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestExtractTestClientID tests the helper function for extracting client IDs from composite keys
+func TestExtractTestClientID(t *testing.T) {
+	tests := []struct {
+		name     string
+		key      string
+		expected string
+	}{
+		{
+			name:     "composite key with pipe separator",
+			key:      "apikey:ABC123|endpoint:/api/test",
+			expected: "ABC123",
+		},
+		{
+			name:     "simple apikey",
+			key:      "apikey:XYZ789",
+			expected: "XYZ789",
+		},
+		{
+			name:     "non-apikey format",
+			key:      "client:test123",
+			expected: "client:test123",
+		},
+		{
+			name:     "empty key",
+			key:      "",
+			expected: "",
+		},
+		{
+			name:     "apikey with multiple pipes",
+			key:      "apikey:CLIENT001|path:/v1/data|method:POST",
+			expected: "CLIENT001",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := extractTestClientID(tt.key)
+			if result != tt.expected {
+				t.Errorf("Expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+// TestMockRedisClientSimulateOperation tests the simulateOperation method
+func TestMockRedisClientSimulateOperation(t *testing.T) {
+	t.Run("basic operation tracking", func(t *testing.T) {
+		mock := NewMockRedisClient()
+
+		// Call simulateOperation multiple times
+		for i := 0; i < 5; i++ {
+			err := mock.simulateOperation("GET")
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+			}
+		}
+
+		// Check that calls were tracked
+		if mock.GetCallCount("GET") != 5 {
+			t.Errorf("Expected 5 calls, got %d", mock.GetCallCount("GET"))
+		}
+
+		// Check total call count
+		if mock.callCount != 5 {
+			t.Errorf("Expected total call count 5, got %d", mock.callCount)
+		}
+	})
+
+	t.Run("should fail immediately", func(t *testing.T) {
+		mock := NewMockRedisClient()
+		mock.SetShouldFail(true)
+
+		err := mock.simulateOperation("SET")
+		if err == nil {
+			t.Error("Expected error when shouldFail is true")
+		}
+		if err.Error() != "mock: simulated failure" {
+			t.Errorf("Expected 'mock: simulated failure', got %q", err.Error())
+		}
+	})
+
+	t.Run("fail after N calls", func(t *testing.T) {
+		mock := NewMockRedisClient()
+		mock.SetFailAfter(3)
+
+		// First 3 calls should succeed
+		for i := 0; i < 3; i++ {
+			err := mock.simulateOperation("DEL")
+			if err != nil {
+				t.Errorf("Call %d should succeed, got error: %v", i+1, err)
+			}
+		}
+
+		// 4th call should fail
+		err := mock.simulateOperation("DEL")
+		if err == nil {
+			t.Error("Expected error after failAfter threshold")
+		}
+		if mock.callCount != 4 {
+			t.Errorf("Expected call count 4, got %d", mock.callCount)
+		}
+	})
+
+	t.Run("latency simulation", func(t *testing.T) {
+		mock := NewMockRedisClient()
+		latency := 50 * time.Millisecond
+		mock.SetLatency(latency)
+
+		start := time.Now()
+		err := mock.simulateOperation("PING")
+		duration := time.Since(start)
+
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+
+		if duration < latency {
+			t.Errorf("Expected latency >= %v, got %v", latency, duration)
+		}
+	})
+
+	t.Run("different operation types", func(t *testing.T) {
+		mock := NewMockRedisClient()
+
+		_ = mock.simulateOperation("GET")
+		_ = mock.simulateOperation("GET")
+		_ = mock.simulateOperation("SET")
+		_ = mock.simulateOperation("DEL")
+
+		if mock.GetCallCount("GET") != 2 {
+			t.Errorf("Expected 2 GET calls, got %d", mock.GetCallCount("GET"))
+		}
+		if mock.GetCallCount("SET") != 1 {
+			t.Errorf("Expected 1 SET call, got %d", mock.GetCallCount("SET"))
+		}
+		if mock.GetCallCount("DEL") != 1 {
+			t.Errorf("Expected 1 DEL call, got %d", mock.GetCallCount("DEL"))
+		}
+		if mock.callCount != 4 {
+			t.Errorf("Expected total call count 4, got %d", mock.callCount)
+		}
+	})
 }
