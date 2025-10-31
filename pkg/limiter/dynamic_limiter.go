@@ -23,8 +23,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/NVIDIA/go-ratelimit/pkg/config"
+	"github.com/redis/go-redis/v9"
 )
 
 // DynamicLimiter implements a rate limiter with per-client configurations
@@ -93,11 +93,8 @@ func (dl *DynamicLimiter) AllowRequest(ctx context.Context, r *http.Request) (bo
 	clientID := extractClientID(k)
 
 	// Get client-specific config
-	cfg, err := dl.cfgManager.GetConfig(ctx, clientID)
-	if err != nil {
-		// Log the error but continue with default config
-		// This is a fail-open approach for config errors
-	}
+	// If GetConfig fails, cfg will contain the default config (fail-open approach)
+	cfg, _ := dl.cfgManager.GetConfig(ctx, clientID)
 
 	// Execute Lua script with client-specific limits
 	windowMs := int64(cfg.WindowSecs * 1000)
@@ -129,10 +126,8 @@ func (dl *DynamicLimiter) RecordBytes(ctx context.Context, r *http.Request, byte
 	clientID := extractClientID(k)
 
 	// Get client-specific config
-	cfg, err := dl.cfgManager.GetConfig(ctx, clientID)
-	if err != nil {
-		// Log the error but continue with default config
-	}
+	// If GetConfig fails, cfg will contain the default config (fail-open approach)
+	cfg, _ := dl.cfgManager.GetConfig(ctx, clientID)
 
 	// Execute Lua script with client-specific limits
 	windowMs := int64(cfg.WindowSecs * 1000)

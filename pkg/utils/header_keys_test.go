@@ -58,14 +58,14 @@ func TestKeyByHeader(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
 			req.RemoteAddr = "192.0.2.1:1234"
-			
+
 			for k, v := range tt.headers {
 				req.Header.Set(k, v)
 			}
-			
+
 			keyFunc := KeyByHeader(tt.headerName)
 			result := keyFunc(req)
-			
+
 			if result != tt.expected {
 				t.Errorf("Expected %q, got %q", tt.expected, result)
 			}
@@ -141,14 +141,14 @@ func TestKeyByHeaderWithOptions(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
 			req.RemoteAddr = "192.0.2.1:1234"
-			
+
 			for k, v := range tt.headers {
 				req.Header.Set(k, v)
 			}
-			
+
 			keyFunc := KeyByHeaderWithOptions(tt.opts)
 			result := keyFunc(req)
-			
+
 			if result != tt.expected {
 				t.Errorf("Expected %q, got %q", tt.expected, result)
 			}
@@ -158,11 +158,11 @@ func TestKeyByHeaderWithOptions(t *testing.T) {
 
 func TestKeyByMultipleHeaders(t *testing.T) {
 	tests := []struct {
-		name       string
-		headers    map[string]string
+		name        string
+		headers     map[string]string
 		headerNames []string
-		separator  string
-		expected   string
+		separator   string
+		expected    string
 	}{
 		{
 			name:        "Both headers present",
@@ -198,14 +198,14 @@ func TestKeyByMultipleHeaders(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
 			req.RemoteAddr = "192.0.2.1:1234"
-			
+
 			for k, v := range tt.headers {
 				req.Header.Set(k, v)
 			}
-			
+
 			keyFunc := KeyByMultipleHeaders(tt.headerNames, tt.separator)
 			result := keyFunc(req)
-			
+
 			if result != tt.expected {
 				t.Errorf("Expected %q, got %q", tt.expected, result)
 			}
@@ -244,14 +244,14 @@ func TestKeyByHeaderWithFallback(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
 			req.RemoteAddr = "192.0.2.1:1234"
-			
+
 			for k, v := range tt.headers {
 				req.Header.Set(k, v)
 			}
-			
+
 			keyFunc := KeyByHeaderWithFallback(tt.headerNames)
 			result := keyFunc(req)
-			
+
 			if result != tt.expected {
 				t.Errorf("Expected %q, got %q", tt.expected, result)
 			}
@@ -270,7 +270,7 @@ func TestSanitizers(t *testing.T) {
 			{"ABC!@#123", "ABC123"},
 			{"", ""},
 		}
-		
+
 		for _, tt := range tests {
 			result := AlphanumericSanitizer(tt.input)
 			if result != tt.expected {
@@ -278,7 +278,7 @@ func TestSanitizers(t *testing.T) {
 			}
 		}
 	})
-	
+
 	t.Run("UUIDSanitizer", func(t *testing.T) {
 		tests := []struct {
 			input    string
@@ -290,7 +290,7 @@ func TestSanitizers(t *testing.T) {
 			{"invalid-uuid", ""},
 			{"", ""},
 		}
-		
+
 		for _, tt := range tests {
 			result := UUIDSanitizer(tt.input)
 			if result != tt.expected {
@@ -298,7 +298,7 @@ func TestSanitizers(t *testing.T) {
 			}
 		}
 	})
-	
+
 	t.Run("MaxLengthSanitizer", func(t *testing.T) {
 		sanitizer := MaxLengthSanitizer(5)
 		tests := []struct {
@@ -310,7 +310,7 @@ func TestSanitizers(t *testing.T) {
 			{"12345", "12345"},
 			{"", ""},
 		}
-		
+
 		for _, tt := range tests {
 			result := sanitizer(tt.input)
 			if result != tt.expected {
@@ -329,7 +329,7 @@ func TestPanicCases(t *testing.T) {
 		}()
 		KeyByHeaderWithOptions(HeaderKeyOptions{HeaderName: ""})
 	})
-	
+
 	t.Run("Empty header names array", func(t *testing.T) {
 		defer func() {
 			if r := recover(); r == nil {
@@ -338,7 +338,7 @@ func TestPanicCases(t *testing.T) {
 		}()
 		KeyByMultipleHeaders([]string{}, ":")
 	})
-	
+
 	t.Run("Empty fallback array", func(t *testing.T) {
 		defer func() {
 			if r := recover(); r == nil {

@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- 
+
 package main
 
 import (
@@ -22,9 +22,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/NVIDIA/go-ratelimit/pkg/ratelimit"
 	"github.com/NVIDIA/go-ratelimit/pkg/utils"
+	"github.com/redis/go-redis/v9"
 )
 
 // This example demonstrates various ways to use header-based rate limiting

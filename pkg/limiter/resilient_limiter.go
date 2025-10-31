@@ -22,8 +22,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/NVIDIA/go-ratelimit/pkg/config"
+	"github.com/redis/go-redis/v9"
 )
 
 // Kraft Proposal : ResilientLimiter combines Redis and in-memory limiters for fault tolerance
@@ -79,9 +79,9 @@ func NewResilientLimiter(
 		memoryLimiter:      memoryLimiter,
 		keyBuilder:         keyBuilder,
 		defaultConfig:      defaultCfg,
-		redisAvailable:     true, 
+		redisAvailable:     true,
 		lastRedisCheck:     time.Now(),
-		redisCheckInterval: 5 * time.Second, 
+		redisCheckInterval: 5 * time.Second,
 	}
 }
 
@@ -109,7 +109,6 @@ func (rl *ResilientLimiter) checkRedisAvailability(ctx context.Context) bool {
 
 	return available
 }
-
 
 func (rl *ResilientLimiter) GetConfigManager() *config.ConfigManager {
 	return rl.redisLimiter.GetConfigManager()
@@ -145,7 +144,7 @@ func (rl *ResilientLimiter) GetClientConfig(ctx context.Context, clientID string
 	if rl.checkRedisAvailability(ctx) {
 		cfg, err := rl.redisLimiter.GetClientConfig(ctx, clientID)
 		if err == nil {
-			rl.memoryLimiter.SetClientConfig(ctx, clientID, cfg)
+			_ = rl.memoryLimiter.SetClientConfig(ctx, clientID, cfg)
 			return cfg, nil
 		}
 

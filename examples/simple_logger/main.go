@@ -22,9 +22,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/NVIDIA/go-ratelimit/pkg/ratelimit"
 	"github.com/NVIDIA/go-ratelimit/pkg/utils"
+	"github.com/redis/go-redis/v9"
 )
 
 // SimpleLogger implements the middleware.Logger interface

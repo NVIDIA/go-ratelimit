@@ -86,7 +86,11 @@ func (h *ConfigHandler) getConfig(w http.ResponseWriter, r *http.Request, client
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(cfg)
+	err = json.NewEncoder(w).Encode(cfg)
+	if err != nil {
+		http.Error(w, "Error encoding response: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 // setConfig updates the configuration for a client
@@ -104,7 +108,11 @@ func (h *ConfigHandler) setConfig(w http.ResponseWriter, r *http.Request, client
 
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	if err != nil {
+		http.Error(w, "Error encoding response: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 // resetConfig removes the custom configuration for a client
@@ -116,5 +124,9 @@ func (h *ConfigHandler) resetConfig(w http.ResponseWriter, r *http.Request, clie
 
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	if err != nil {
+		http.Error(w, "Error encoding response: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 }

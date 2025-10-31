@@ -371,7 +371,7 @@ func TestServiceMiddleware(t *testing.T) {
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	})
 
 	t.Run("request rate limiting", func(t *testing.T) {
@@ -408,7 +408,10 @@ func TestServiceMiddleware(t *testing.T) {
 		// Handler that returns 500 bytes
 		bigHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write(bytes.Repeat([]byte("a"), 500))
+			_, err := w.Write(bytes.Repeat([]byte("a"), 500))
+			if err != nil {
+				t.Errorf("Error writing response: %v", err)
+			}
 		})
 
 		wrapped := middleware(bigHandler)
@@ -457,7 +460,7 @@ func TestSelectiveMiddleware(t *testing.T) {
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	})
 
 	// Only rate limit /api/* paths
@@ -534,7 +537,7 @@ func TestDynamicConfiguration(t *testing.T) {
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	})
 
 	middleware := service.Middleware()
@@ -600,7 +603,10 @@ func TestAdminAPIIntegration(t *testing.T) {
 	// Test protected endpoint
 	mux.HandleFunc("/api/test", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Protected endpoint"))
+		_, err := w.Write([]byte("Protected endpoint"))
+		if err != nil {
+			t.Errorf("Error writing response: %v", err)
+		}
 	})
 
 	server := httptest.NewServer(mux)
@@ -670,7 +676,7 @@ func TestConcurrentRequests(t *testing.T) {
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	})
 
 	middleware := service.Middleware()
@@ -743,7 +749,7 @@ func BenchmarkRateLimitMiddleware(b *testing.B) {
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	})
 
 	middleware := service.Middleware()
@@ -780,7 +786,7 @@ func BenchmarkDualMiddleware(b *testing.B) {
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	})
 
 	middleware := service.Middleware()

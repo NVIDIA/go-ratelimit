@@ -221,7 +221,7 @@ func TestSelectiveRateLimitMiddleware(t *testing.T) {
 
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("OK"))
+				_, _ = w.Write([]byte("OK"))
 			})
 
 			wrapped := middleware(handler)
@@ -343,7 +343,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("OK"))
+				_, _ = w.Write([]byte("OK"))
 			})
 
 			wrapped := middleware(handler)
@@ -428,7 +428,7 @@ func TestDualRateLimitMiddleware(t *testing.T) {
 
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
-				w.Write(bytes.Repeat([]byte("a"), tt.responseSize))
+				_, _ = w.Write(bytes.Repeat([]byte("a"), tt.responseSize))
 			})
 
 			wrapped := middleware(handler)
@@ -471,12 +471,12 @@ func TestDynamicRateLimitMiddleware(t *testing.T) {
 
 	// Set custom limits for specific clients
 	ctx := context.Background()
-	dl.SetClientConfig(ctx, "client:premium", config.ClientConfig{
+	_ = dl.SetClientConfig(ctx, "client:premium", config.ClientConfig{
 		RequestLimit: 20,
 		ByteLimit:    10000,
 		WindowSecs:   60,
 	})
-	dl.SetClientConfig(ctx, "client:basic", config.ClientConfig{
+	_ = dl.SetClientConfig(ctx, "client:basic", config.ClientConfig{
 		RequestLimit: 3,
 		ByteLimit:    500,
 		WindowSecs:   60,
@@ -486,7 +486,7 @@ func TestDynamicRateLimitMiddleware(t *testing.T) {
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Response"))
+		_, _ = w.Write([]byte("Response"))
 	})
 
 	wrapped := middleware(handler)
@@ -569,7 +569,7 @@ func TestMiddlewareConcurrency(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt64(&requestCount, 1)
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	})
 
 	wrapped := middleware(handler)
@@ -661,7 +661,7 @@ func BenchmarkByteCounterWriter(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		recorder := httptest.NewRecorder()
 		counter := NewByteCounterWriter(recorder)
-		counter.Write(data)
+		_, _ = counter.Write(data)
 	}
 }
 
@@ -684,7 +684,7 @@ func BenchmarkSelectiveRateLimitMiddleware(b *testing.B) {
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	})
 
 	wrapped := middleware(handler)
@@ -738,7 +738,7 @@ func BenchmarkRateLimitMiddleware(b *testing.B) {
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	})
 
 	for _, bm := range benchmarks {
@@ -960,7 +960,7 @@ func TestDynamicRateLimitMiddlewareWithCustomLogger(t *testing.T) {
 
 	// Set up custom config for a client
 	ctx := context.Background()
-	dl.SetClientConfig(ctx, "premium", config.ClientConfig{
+	_ = dl.SetClientConfig(ctx, "premium", config.ClientConfig{
 		RequestLimit: 100,
 		ByteLimit:    10240,
 		WindowSecs:   60,
@@ -970,7 +970,7 @@ func TestDynamicRateLimitMiddlewareWithCustomLogger(t *testing.T) {
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	})
 
 	wrapped := middleware(handler)

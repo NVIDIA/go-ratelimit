@@ -22,12 +22,12 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/NVIDIA/go-ratelimit/pkg/api"
 	"github.com/NVIDIA/go-ratelimit/pkg/config"
 	"github.com/NVIDIA/go-ratelimit/pkg/limiter"
 	"github.com/NVIDIA/go-ratelimit/pkg/middleware"
 	"github.com/NVIDIA/go-ratelimit/pkg/utils"
+	"github.com/redis/go-redis/v9"
 )
 
 // Options configures the rate limiter
