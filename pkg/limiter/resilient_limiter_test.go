@@ -23,9 +23,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/go-ratelimit/pkg/config"
+	"github.com/NVIDIA/go-ratelimit/pkg/testutil"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
-	"github.com/NVIDIA/go-ratelimit/pkg/config"
 )
 
 // testRedisClient wraps redis.Client to allow mocking errors
@@ -57,9 +58,7 @@ func (c *testRedisClient) Do(ctx context.Context, args ...interface{}) *redis.Cm
 
 func TestResilientLimiter_RedisAvailable(t *testing.T) {
 	// Create a real Redis client for testing
-	rdb := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379", // Use default Redis address
-	})
+	rdb := testutil.NewTestRedisClientDefault()
 
 	// Wrap it in our test client
 	testRdb := &testRedisClient{
@@ -106,9 +105,7 @@ func TestResilientLimiter_RedisAvailable(t *testing.T) {
 
 func TestResilientLimiter_RedisUnavailable(t *testing.T) {
 	// Create a real Redis client for testing
-	rdb := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379", // Use default Redis address
-	})
+	rdb := testutil.NewTestRedisClientDefault()
 
 	// Wrap it in our test client with errors
 	testRdb := &testRedisClient{
@@ -162,9 +159,7 @@ func TestResilientLimiter_RedisUnavailable(t *testing.T) {
 
 func TestResilientLimiter_RedisBecomesUnavailable(t *testing.T) {
 	// Create a real Redis client for testing
-	rdb := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379", // Use default Redis address
-	})
+	rdb := testutil.NewTestRedisClientDefault()
 
 	// Wrap it in our test client that initially works
 	testRdb := &testRedisClient{
@@ -207,9 +202,7 @@ func TestResilientLimiter_RedisBecomesUnavailable(t *testing.T) {
 
 func TestResilientLimiter_ConfigSync(t *testing.T) {
 	// Create a real Redis client for testing
-	rdb := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379", // Use default Redis address
-	})
+	rdb := testutil.NewTestRedisClientDefault()
 
 	// Wrap it in our test client
 	testRdb := &testRedisClient{
@@ -260,9 +253,7 @@ func TestResilientLimiter_ConfigSync(t *testing.T) {
 
 func TestResilientLimiter_ResetConfig(t *testing.T) {
 	// Create a real Redis client for testing
-	rdb := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379", // Use default Redis address
-	})
+	rdb := testutil.NewTestRedisClientDefault()
 
 	// Wrap it in our test client
 	testRdb := &testRedisClient{

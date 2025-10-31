@@ -17,7 +17,6 @@ package limiter
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"sync"
@@ -76,11 +75,11 @@ func (m *MockRedisClient) simulateOperation(op string) error {
 	}
 
 	if m.shouldFail {
-		return errors.New("redis: connection failed")
+		return fmt.Errorf("mock: simulated failure")
 	}
 
 	if m.failAfter > 0 && m.callCount > m.failAfter {
-		return errors.New("redis: connection failed after n calls")
+		return fmt.Errorf("mock: simulated failure after %d calls", m.failAfter)
 	}
 
 	return nil
@@ -226,7 +225,7 @@ func TestDualLimiterWithMock(t *testing.T) {
 			requestLimit: 5,
 			byteLimit:    1000,
 			requests:     []int{100, 200, 300, 200, 200, 100},
-			expectDenied: 2, // Either limit can be hit
+			expectDenied: 1, // Request limit hit based order of implementation; either bytes or requests
 			deniedReason: "either",
 		},
 	}
@@ -516,50 +515,82 @@ func TestConcurrentAccess(t *testing.T) {
 
 // TestSlidingWindow tests sliding window algorithm
 func TestSlidingWindow(t *testing.T) {
+	// Use mock clock for deterministic testing
+	clock := &mockClock{currentTime: time.Now()}
 	limiter := &SlidingWindowLimiter{
 		limit:    5,
 		window:   100 * time.Millisecond,
 		requests: make(map[string][]time.Time),
+		clock:    clock,
 	}
 
 	ctx := context.Background()
 	key := "test-key"
 
 	// Make 5 requests - all should be allowed
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if !limiter.AllowRequest(ctx, key) {
 			t.Errorf("Request %d should be allowed", i+1)
 		}
-		time.Sleep(10 * time.Millisecond)
+		clock.Advance(10 * time.Millisecond)
 	}
+	// t = t_0 + 50ms
 
 	// 6th request should be denied
 	if limiter.AllowRequest(ctx, key) {
 		t.Error("6th request should be denied")
 	}
 
-	// Wait for window to slide
-	time.Sleep(60 * time.Millisecond)
+	// Advance time so oldest request (at t_0) slides out of 100ms window
+	clock.Advance(60 * time.Millisecond)
+	// t = t_0 + 110ms, window is [t_0 + 10ms, t_0 + 110ms]
 
 	// Should allow one more request as oldest one slides out
 	if !limiter.AllowRequest(ctx, key) {
+		t.Logf("Current time: %v", clock.Now())
+		t.Logf("Requests in window: %v", limiter.requests[key])
 		t.Error("Request should be allowed after window slides")
 	}
 
-	// But not two
+	// But not two - we have 5 in window again
 	if limiter.AllowRequest(ctx, key) {
+		t.Logf("Current time: %v", clock.Now())
+		t.Logf("Requests in window: %v", limiter.requests[key])
 		t.Error("Request should be denied - limit still reached")
 	}
 
 	// Wait for complete window reset
-	time.Sleep(150 * time.Millisecond)
+	clock.Advance(150 * time.Millisecond)
 
 	// Should allow 5 requests again
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if !limiter.AllowRequest(ctx, key) {
 			t.Errorf("Request %d should be allowed after window reset", i+1)
 		}
 	}
+}
+
+// timeProvider allows injecting time for testing
+type timeProvider interface {
+	Now() time.Time
+}
+
+// mockClock provides controllable time for testing
+type mockClock struct {
+	mu          sync.Mutex
+	currentTime time.Time
+}
+
+func (m *mockClock) Now() time.Time {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.currentTime
+}
+
+func (m *mockClock) Advance(d time.Duration) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.currentTime = m.currentTime.Add(d)
 }
 
 // SlidingWindowLimiter implements sliding window algorithm
@@ -568,13 +599,14 @@ type SlidingWindowLimiter struct {
 	limit    int
 	window   time.Duration
 	requests map[string][]time.Time
+	clock    timeProvider
 }
 
 func (l *SlidingWindowLimiter) AllowRequest(ctx context.Context, key string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	now := time.Now()
+	now := l.clock.Now()
 	windowStart := now.Add(-l.window)
 
 	// Get existing requests
@@ -584,10 +616,11 @@ func (l *SlidingWindowLimiter) AllowRequest(ctx context.Context, key string) boo
 		return true
 	}
 
-	// Remove expired requests
+	// Remove expired requests (keep requests >= windowStart)
 	validRequests := []time.Time{}
 	for _, ts := range timestamps {
-		if ts.After(windowStart) {
+		// Use >= comparison: request at exactly windowStart is still valid
+		if !ts.Before(windowStart) {
 			validRequests = append(validRequests, ts)
 		}
 	}
@@ -714,4 +747,148 @@ func TestKeyFunction(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestExtractTestClientID tests the helper function for extracting client IDs from composite keys
+func TestExtractTestClientID(t *testing.T) {
+	tests := []struct {
+		name     string
+		key      string
+		expected string
+	}{
+		{
+			name:     "composite key with pipe separator",
+			key:      "apikey:ABC123|endpoint:/api/test",
+			expected: "ABC123",
+		},
+		{
+			name:     "simple apikey",
+			key:      "apikey:XYZ789",
+			expected: "XYZ789",
+		},
+		{
+			name:     "non-apikey format",
+			key:      "client:test123",
+			expected: "client:test123",
+		},
+		{
+			name:     "empty key",
+			key:      "",
+			expected: "",
+		},
+		{
+			name:     "apikey with multiple pipes",
+			key:      "apikey:CLIENT001|path:/v1/data|method:POST",
+			expected: "CLIENT001",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := extractTestClientID(tt.key)
+			if result != tt.expected {
+				t.Errorf("Expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+// TestMockRedisClientSimulateOperation tests the simulateOperation method
+func TestMockRedisClientSimulateOperation(t *testing.T) {
+	t.Run("basic operation tracking", func(t *testing.T) {
+		mock := NewMockRedisClient()
+
+		// Call simulateOperation multiple times
+		for i := 0; i < 5; i++ {
+			err := mock.simulateOperation("GET")
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+			}
+		}
+
+		// Check that calls were tracked
+		if mock.GetCallCount("GET") != 5 {
+			t.Errorf("Expected 5 calls, got %d", mock.GetCallCount("GET"))
+		}
+
+		// Check total call count
+		if mock.callCount != 5 {
+			t.Errorf("Expected total call count 5, got %d", mock.callCount)
+		}
+	})
+
+	t.Run("should fail immediately", func(t *testing.T) {
+		mock := NewMockRedisClient()
+		mock.SetShouldFail(true)
+
+		err := mock.simulateOperation("SET")
+		if err == nil {
+			t.Error("Expected error when shouldFail is true")
+		}
+		if err.Error() != "mock: simulated failure" {
+			t.Errorf("Expected 'mock: simulated failure', got %q", err.Error())
+		}
+	})
+
+	t.Run("fail after N calls", func(t *testing.T) {
+		mock := NewMockRedisClient()
+		mock.SetFailAfter(3)
+
+		// First 3 calls should succeed
+		for i := 0; i < 3; i++ {
+			err := mock.simulateOperation("DEL")
+			if err != nil {
+				t.Errorf("Call %d should succeed, got error: %v", i+1, err)
+			}
+		}
+
+		// 4th call should fail
+		err := mock.simulateOperation("DEL")
+		if err == nil {
+			t.Error("Expected error after failAfter threshold")
+		}
+		if mock.callCount != 4 {
+			t.Errorf("Expected call count 4, got %d", mock.callCount)
+		}
+	})
+
+	t.Run("latency simulation", func(t *testing.T) {
+		mock := NewMockRedisClient()
+		latency := 50 * time.Millisecond
+		mock.SetLatency(latency)
+
+		start := time.Now()
+		err := mock.simulateOperation("PING")
+		duration := time.Since(start)
+
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+
+		if duration < latency {
+			t.Errorf("Expected latency >= %v, got %v", latency, duration)
+		}
+	})
+
+	t.Run("different operation types", func(t *testing.T) {
+		mock := NewMockRedisClient()
+
+		_ = mock.simulateOperation("GET")
+		_ = mock.simulateOperation("GET")
+		_ = mock.simulateOperation("SET")
+		_ = mock.simulateOperation("DEL")
+
+		if mock.GetCallCount("GET") != 2 {
+			t.Errorf("Expected 2 GET calls, got %d", mock.GetCallCount("GET"))
+		}
+		if mock.GetCallCount("SET") != 1 {
+			t.Errorf("Expected 1 SET call, got %d", mock.GetCallCount("SET"))
+		}
+		if mock.GetCallCount("DEL") != 1 {
+			t.Errorf("Expected 1 DEL call, got %d", mock.GetCallCount("DEL"))
+		}
+		if mock.callCount != 4 {
+			t.Errorf("Expected total call count 4, got %d", mock.callCount)
+		}
+	})
 }

@@ -28,9 +28,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/NVIDIA/go-ratelimit/pkg/config"
 	"github.com/NVIDIA/go-ratelimit/pkg/limiter"
+	"github.com/NVIDIA/go-ratelimit/pkg/testutil"
+	"github.com/redis/go-redis/v9"
 )
 
 // =============================================================================
@@ -38,9 +39,7 @@ import (
 // =============================================================================
 
 func setupTestRedis(t *testing.T) *redis.Client {
-	redisClient := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
-	})
+	redisClient := testutil.NewTestRedisClientDefault()
 
 	ctx := context.Background()
 	if err := redisClient.Ping(ctx).Err(); err != nil {
@@ -626,9 +625,7 @@ func TestAdminHandlerLargeBatchOperations(t *testing.T) {
 // =============================================================================
 
 func BenchmarkAdminHandler(b *testing.B) {
-	redisClient := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
-	})
+	redisClient := testutil.NewTestRedisClientDefault()
 	defer redisClient.Close()
 
 	ctx := context.Background()

@@ -54,7 +54,10 @@ func DualRateLimitMiddleware(dl *limiter.DualLimiter) func(http.Handler) http.Ha
 			// This is post-facto recording - we can't prevent the bytes from being sent
 			// but we record it for future rate limiting decisions
 			if bcw.StatusCode < 400 { // Only count successful responses
-				dl.RecordBytes(r.Context(), r, bcw.BytesWritten)
+				_, _, _, err := dl.RecordBytes(r.Context(), r, bcw.BytesWritten)
+				if err != nil {
+					fmt.Println("error calling RecordBytes:", err)
+				}
 				// Note: We can't set headers here as they won't be sent after the body
 				// Headers must be set before the body is written
 			}

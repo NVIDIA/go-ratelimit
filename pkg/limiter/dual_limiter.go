@@ -149,7 +149,8 @@ if bytes == 0 then
     if req_limit < 0 or req_count < req_limit then
         allowed = 1
         -- For disabled limits, return a high number for remaining
-        remaining = req_limit < 0 and 999999 or (req_limit - req_count)
+        -- Subtract 1 from remaining to account for the current request
+        remaining = req_limit < 0 and 999999 or (req_limit - req_count - 1)
     else
         allowed = 0
         remaining = 0

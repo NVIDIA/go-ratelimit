@@ -23,13 +23,13 @@ import (
 	"os"
 	"time"
 
-	"github.com/redis/go-redis/v9"
-	"github.com/uptrace/opentelemetry-go-extra/otelzap"
 	"github.com/NVIDIA/go-ratelimit/pkg/config"
 	"github.com/NVIDIA/go-ratelimit/pkg/limiter"
 	logger "github.com/NVIDIA/go-ratelimit/pkg/logger"
 	"github.com/NVIDIA/go-ratelimit/pkg/middleware"
 	"github.com/NVIDIA/go-ratelimit/pkg/utils"
+	"github.com/redis/go-redis/v9"
+	"github.com/uptrace/opentelemetry-go-extra/otelzap"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )

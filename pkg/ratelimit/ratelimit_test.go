@@ -21,7 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/go-ratelimit/pkg/middleware"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -198,7 +197,7 @@ func TestWithKeyFunc(t *testing.T) {
 type mockService struct {
 	middlewareCalled bool
 	selectiveCalled  bool
-	matcher          middleware.PathMatcher
+	matcher          func(string) bool
 }
 
 func (s *mockService) Middleware() func(http.Handler) http.Handler {
@@ -208,10 +207,79 @@ func (s *mockService) Middleware() func(http.Handler) http.Handler {
 	}
 }
 
-func (s *mockService) SelectiveMiddleware(matcher middleware.PathMatcher) func(http.Handler) http.Handler {
+func (s *mockService) SelectiveMiddleware(matcher func(string) bool) func(http.Handler) http.Handler {
 	s.selectiveCalled = true
 	s.matcher = matcher
 	return func(next http.Handler) http.Handler {
 		return next
 	}
+}
+
+// TestMockService tests the mock service implementation
+func TestMockService(t *testing.T) {
+	t.Run("Middleware", func(t *testing.T) {
+		mock := &mockService{}
+
+		// Call Middleware and verify it was called
+		middleware := mock.Middleware()
+		if !mock.middlewareCalled {
+			t.Error("Expected middlewareCalled to be true")
+		}
+
+		// Verify the middleware passes through the handler
+		handlerCalled := false
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			handlerCalled = true
+		})
+
+		wrapped := middleware(handler)
+		req := httptest.NewRequest("GET", "/test", nil)
+		rr := httptest.NewRecorder()
+		wrapped.ServeHTTP(rr, req)
+
+		if !handlerCalled {
+			t.Error("Expected handler to be called")
+		}
+	})
+
+	t.Run("SelectiveMiddleware", func(t *testing.T) {
+		mock := &mockService{}
+
+		// Create a matcher function
+		matcher := func(path string) bool {
+			return path == "/api/test"
+		}
+
+		// Call SelectiveMiddleware
+		middleware := mock.SelectiveMiddleware(matcher)
+		if !mock.selectiveCalled {
+			t.Error("Expected selectiveCalled to be true")
+		}
+
+		// Verify matcher was stored
+		if mock.matcher == nil {
+			t.Error("Expected matcher to be stored")
+		}
+		if !mock.matcher("/api/test") {
+			t.Error("Expected matcher to match /api/test")
+		}
+		if mock.matcher("/other") {
+			t.Error("Expected matcher not to match /other")
+		}
+
+		// Verify the middleware passes through the handler
+		handlerCalled := false
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			handlerCalled = true
+		})
+
+		wrapped := middleware(handler)
+		req := httptest.NewRequest("GET", "/test", nil)
+		rr := httptest.NewRecorder()
+		wrapped.ServeHTTP(rr, req)
+
+		if !handlerCalled {
+			t.Error("Expected handler to be called")
+		}
+	})
 }

@@ -115,7 +115,7 @@ func (h *AdminHandler) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(status)
+	_ = json.NewEncoder(w).Encode(status)
 }
 
 // handleTenant handles tenant-specific rate limit operations
@@ -211,7 +211,7 @@ func (h *AdminHandler) getClientConfig(w http.ResponseWriter, r *http.Request, c
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // setTenantConfig updates configuration for a tenant
@@ -254,7 +254,7 @@ func (h *AdminHandler) setTenantConfig(w http.ResponseWriter, r *http.Request, c
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // resetTenantConfig resets a tenant to default configuration
@@ -272,7 +272,7 @@ func (h *AdminHandler) resetTenantConfig(w http.ResponseWriter, r *http.Request,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // setClientConfigGeneric updates configuration for a generic client
@@ -297,7 +297,7 @@ func (h *AdminHandler) setClientConfigGeneric(w http.ResponseWriter, r *http.Req
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // resetClientConfigGeneric resets a generic client to default configuration
@@ -314,7 +314,7 @@ func (h *AdminHandler) resetClientConfigGeneric(w http.ResponseWriter, r *http.R
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // BatchOperation represents a batch operation request
@@ -426,7 +426,7 @@ func (h *AdminHandler) handleBatch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // handleLegacyConfig maintains backward compatibility with existing config_handler.go endpoints

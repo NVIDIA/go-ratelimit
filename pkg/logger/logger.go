@@ -83,7 +83,7 @@ func InitLogger(config config.Config) {
 	Log = otelzap.New(zapLogger)
 
 	// Sync logs on exit
-	defer zapLogger.Sync()
+	defer func() { _ = zapLogger.Sync() }()
 
 	// Replace global logger
 	undo := otelzap.ReplaceGlobals(Log)

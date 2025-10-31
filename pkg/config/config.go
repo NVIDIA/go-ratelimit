@@ -22,7 +22,7 @@ import (
 )
 
 type Config struct {
-	Logging             LoggingConfig             `yaml:"logging"`
+	Logging LoggingConfig `yaml:"logging"`
 }
 
 type LoggingConfig struct {

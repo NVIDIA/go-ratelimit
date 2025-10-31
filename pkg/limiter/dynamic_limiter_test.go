@@ -24,10 +24,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/go-ratelimit/pkg/config"
+	"github.com/NVIDIA/go-ratelimit/pkg/testutil"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/NVIDIA/go-ratelimit/pkg/config"
 )
 
 func TestDynamicLimiter_NewDynamicLimiter(t *testing.T) {
@@ -365,7 +366,7 @@ func TestDynamicLimiter_ConcurrentConfigUpdates(t *testing.T) {
 	var wg sync.WaitGroup
 	numGoroutines := 10
 
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
@@ -438,10 +439,7 @@ func TestDynamicLimiter_Integration(t *testing.T) {
 	}
 
 	// Connect to actual Redis
-	rdb := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
-		DB:   15, // Use test database
-	})
+	rdb := testutil.NewTestRedisClient("localhost:6379", 15)
 
 	// Check if Redis is available
 	ctx := context.Background()
@@ -467,7 +465,7 @@ func TestDynamicLimiter_Integration(t *testing.T) {
 		req.Header.Set("X-API-Key", "DEFAULT_TEST")
 
 		// Test with default config
-		for i := 0; i < 7; i++ {
+		for i := range 7 {
 			allowed, remaining, reset, err := limiter.AllowRequest(ctx, req)
 			require.NoError(t, err)
 
@@ -501,7 +499,7 @@ func TestDynamicLimiter_Integration(t *testing.T) {
 		req.Header.Set("X-API-Key", "CUSTOM_TEST")
 
 		// Should allow 10 requests with custom config
-		for i := 0; i < 12; i++ {
+		for i := range 12 {
 			allowed, remaining, _, err := limiter.AllowRequest(ctx, req)
 			require.NoError(t, err)
 
@@ -518,7 +516,7 @@ func TestDynamicLimiter_Integration(t *testing.T) {
 		time.Sleep(time.Second + 100*time.Millisecond)
 
 		totalBytes := int64(0)
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			bytes := int64(512)
 			allowed, _, _, err := limiter.RecordBytes(ctx, req, bytes)
 			require.NoError(t, err)

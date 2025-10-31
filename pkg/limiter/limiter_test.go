@@ -25,9 +25,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/redis/go-redis/v9"
-	"github.com/stretchr/testify/assert"
 	"github.com/NVIDIA/go-ratelimit/pkg/config"
+	"github.com/NVIDIA/go-ratelimit/pkg/testutil"
+	"github.com/stretchr/testify/assert"
 )
 
 // TestHelpers contains helper functions for testing limiters
@@ -57,10 +57,7 @@ func TestConcurrentRateLimiting(t *testing.T) {
 	}
 
 	// Connect to Redis for testing
-	rdb := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
-		DB:   15, // Use test database
-	})
+	rdb := testutil.NewTestRedisClient("localhost:6379", 15)
 
 	ctx := context.Background()
 	if err := rdb.Ping(ctx).Err(); err != nil {
@@ -306,7 +303,13 @@ func TestRaceConditions(t *testing.T) {
 	// Run with: go test -race ./pkg/limiter
 
 	mockRedis := NewMockRedisClient()
-	rdb := redis.NewClient(&redis.Options{})
+	rdb := testutil.NewTestRedisClientDefault()
+
+	ctx := context.Background()
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		t.Skip("Redis not available, skipping race condition test")
+	}
+	defer rdb.Close()
 
 	keyBuilder := func(r *http.Request) string {
 		return "race-test"
@@ -315,25 +318,31 @@ func TestRaceConditions(t *testing.T) {
 	t.Run("RedisLimiterRace", func(t *testing.T) {
 		limiter := NewRedisLimiter(rdb, "test", 100, time.Minute, keyBuilder)
 		testRaceCondition(t, func(ctx context.Context, req *http.Request) {
-			limiter.Allow(ctx, req)
+			_, _, _, err := limiter.Allow(ctx, req)
+			assert.NoError(t, err)
 		})
 	})
 
 	t.Run("DualLimiterRace", func(t *testing.T) {
 		limiter := NewDualLimiter(rdb, "test", 100, 1048576, time.Minute, keyBuilder)
 		testRaceCondition(t, func(ctx context.Context, req *http.Request) {
-			limiter.AllowRequest(ctx, req)
-			limiter.RecordBytes(ctx, req, 1024)
+			_, _, _, err := limiter.AllowRequest(ctx, req)
+			assert.NoError(t, err)
+			_, _, _, err = limiter.RecordBytes(ctx, req, 1024)
+			assert.NoError(t, err)
 		})
 	})
 
 	t.Run("DynamicLimiterRace", func(t *testing.T) {
 		limiter := NewDynamicLimiter(rdb, "test", 100, 1048576, time.Minute, keyBuilder)
 		testRaceCondition(t, func(ctx context.Context, req *http.Request) {
-			limiter.AllowRequest(ctx, req)
+			_, _, _, err := limiter.AllowRequest(ctx, req)
+			assert.NoError(t, err)
 			cfg := config.ClientConfig{RequestLimit: 50, ByteLimit: 524288, WindowSecs: 60}
-			limiter.SetClientConfig(ctx, "test-client", cfg)
-			limiter.GetClientConfig(ctx, "test-client")
+			err = limiter.SetClientConfig(ctx, "test-client", cfg)
+			assert.NoError(t, err)
+			_, err = limiter.GetClientConfig(ctx, "test-client")
+			assert.NoError(t, err)
 		})
 	})
 
@@ -364,7 +373,14 @@ func TestMemoryLeaks(t *testing.T) {
 		t.Skip("Skipping memory leak test in short mode")
 	}
 
-	rdb := redis.NewClient(&redis.Options{})
+	rdb := testutil.NewTestRedisClientDefault()
+
+	ctx := context.Background()
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		t.Skip("Redis not available, skipping memory leak test")
+	}
+	defer rdb.Close()
+
 	keyBuilder := func(r *http.Request) string {
 		return "memory-test"
 	}
@@ -374,7 +390,6 @@ func TestMemoryLeaks(t *testing.T) {
 	dualLimiter := NewDualLimiter(rdb, "test", 1000, 10*1048576, time.Minute, keyBuilder)
 	dynamicLimiter := NewDynamicLimiter(rdb, "test", 1000, 10*1048576, time.Minute, keyBuilder)
 
-	ctx := context.Background()
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 
 	// Simulate heavy usage
@@ -382,7 +397,8 @@ func TestMemoryLeaks(t *testing.T) {
 
 	t.Run("RedisLimiterMemory", func(t *testing.T) {
 		for i := 0; i < iterations; i++ {
-			redisLimiter.Allow(ctx, req)
+			_, _, _, err := redisLimiter.Allow(ctx, req)
+			assert.NoError(t, err)
 			if i%1000 == 0 {
 				t.Logf("RedisLimiter iteration %d", i)
 			}
@@ -391,9 +407,11 @@ func TestMemoryLeaks(t *testing.T) {
 
 	t.Run("DualLimiterMemory", func(t *testing.T) {
 		for i := 0; i < iterations; i++ {
-			dualLimiter.AllowRequest(ctx, req)
+			_, _, _, err := dualLimiter.AllowRequest(ctx, req)
+			assert.NoError(t, err)
 			if i%2 == 0 {
-				dualLimiter.RecordBytes(ctx, req, int64(i))
+				_, _, _, err = dualLimiter.RecordBytes(ctx, req, int64(i))
+				assert.NoError(t, err)
 			}
 			if i%1000 == 0 {
 				t.Logf("DualLimiter iteration %d", i)
@@ -403,14 +421,16 @@ func TestMemoryLeaks(t *testing.T) {
 
 	t.Run("DynamicLimiterMemory", func(t *testing.T) {
 		for i := 0; i < iterations; i++ {
-			dynamicLimiter.AllowRequest(ctx, req)
+			_, _, _, err := dynamicLimiter.AllowRequest(ctx, req)
+			assert.NoError(t, err)
 			if i%10 == 0 {
 				cfg := config.ClientConfig{
 					RequestLimit: 100 + i%50,
 					ByteLimit:    int64((1 + i%10) * 1048576),
 					WindowSecs:   60,
 				}
-				dynamicLimiter.SetClientConfig(ctx, fmt.Sprintf("client-%d", i%100), cfg)
+				err = dynamicLimiter.SetClientConfig(ctx, fmt.Sprintf("client-%d", i%100), cfg)
+				assert.NoError(t, err)
 			}
 			if i%1000 == 0 {
 				t.Logf("DynamicLimiter iteration %d", i)
@@ -421,7 +441,14 @@ func TestMemoryLeaks(t *testing.T) {
 
 // BenchmarkComparison compares performance of different limiters
 func BenchmarkComparison(b *testing.B) {
-	rdb := redis.NewClient(&redis.Options{})
+	rdb := testutil.NewTestRedisClientDefault()
+
+	ctx := context.Background()
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		b.Skip("Redis not available, skipping benchmark")
+	}
+	defer rdb.Close()
+
 	keyBuilder := func(r *http.Request) string {
 		return "bench-compare"
 	}
@@ -430,34 +457,42 @@ func BenchmarkComparison(b *testing.B) {
 	dualLimiter := NewDualLimiter(rdb, "bench", 10000, 100*1048576, time.Minute, keyBuilder)
 	dynamicLimiter := NewDynamicLimiter(rdb, "bench", 10000, 100*1048576, time.Minute, keyBuilder)
 
-	ctx := context.Background()
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 
 	b.Run("RedisLimiter", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			redisLimiter.Allow(ctx, req)
+			_, _, _, err := redisLimiter.Allow(ctx, req)
+			assert.NoError(b, err)
 		}
 	})
 
 	b.Run("DualLimiter", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			dualLimiter.AllowRequest(ctx, req)
+			_, _, _, err := dualLimiter.AllowRequest(ctx, req)
+			assert.NoError(b, err)
 		}
 	})
 
 	b.Run("DynamicLimiter", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			dynamicLimiter.AllowRequest(ctx, req)
+			_, _, _, err := dynamicLimiter.AllowRequest(ctx, req)
+			assert.NoError(b, err)
 		}
 	})
 }
 
 // TestEdgeCases tests edge cases and boundary conditions
 func TestEdgeCases(t *testing.T) {
-	rdb := redis.NewClient(&redis.Options{})
+	rdb := testutil.NewTestRedisClientDefault()
+
+	ctx := context.Background()
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		t.Skip("Redis not available, skipping edge case test")
+	}
+	defer rdb.Close()
 
 	t.Run("ZeroLimit", func(t *testing.T) {
 		keyBuilder := func(r *http.Request) string { return "zero-test" }
