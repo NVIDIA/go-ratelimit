@@ -103,7 +103,7 @@ func (dl *DynamicLimiter) AllowRequest(ctx context.Context, r *http.Request) (bo
 	windowMs := int64(cfg.WindowSecs * 1000)
 	res, err := dl.lua.Run(ctx, dl.rdb,
 		[]string{dl.requestKey(k), dl.byteKey(k)},
-		windowMs, cfg.RequestLimit, cfg.ByteLimit, 0).Result()
+		windowMs, cfg.RequestLimit, cfg.ByteLimit, 0, "request").Result()
 	if err != nil {
 		return false, 0, 0, err
 	}
@@ -138,7 +138,7 @@ func (dl *DynamicLimiter) RecordBytes(ctx context.Context, r *http.Request, byte
 	windowMs := int64(cfg.WindowSecs * 1000)
 	res, err := dl.lua.Run(ctx, dl.rdb,
 		[]string{dl.requestKey(k), dl.byteKey(k)},
-		windowMs, cfg.RequestLimit, cfg.ByteLimit, bytes).Result()
+		windowMs, cfg.RequestLimit, cfg.ByteLimit, bytes, "bytes").Result()
 	if err != nil {
 		return false, 0, 0, err
 	}

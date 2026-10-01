@@ -295,6 +295,7 @@ func TestDualLimiter_LuaScript(t *testing.T) {
 	assert.Contains(t, dualSlidingLua, "ARGV[2]", "Should use request limit")
 	assert.Contains(t, dualSlidingLua, "ARGV[3]", "Should use byte limit")
 	assert.Contains(t, dualSlidingLua, "ARGV[4]", "Should use bytes parameter")
+	assert.Contains(t, dualSlidingLua, "ARGV[5]", "Should use operation mode")
 	assert.Contains(t, dualSlidingLua, "req_key", "Should handle request key")
 	assert.Contains(t, dualSlidingLua, "byte_key", "Should handle byte key")
 }
@@ -360,6 +361,34 @@ func TestDualLimiter_Integration(t *testing.T) {
 	keyBuilder := func(r *http.Request) string {
 		return "integration-test"
 	}
+
+	zeroByteLimiter := NewDualLimiter(rdb, "zero-byte", 2, 1024, time.Minute, keyBuilder)
+	zeroByteRequest := httptest.NewRequest(http.MethodGet, "/zero-byte", nil)
+
+	t.Run("ZeroByteRecordDoesNotCountRequest", func(t *testing.T) {
+		allowed, _, _, err := zeroByteLimiter.RecordBytes(ctx, zeroByteRequest, 0)
+		require.NoError(t, err)
+		assert.True(t, allowed)
+
+		for i := 0; i < 2; i++ {
+			allowed, _, _, err := zeroByteLimiter.AllowRequest(ctx, zeroByteRequest)
+			require.NoError(t, err)
+			assert.True(t, allowed, "request %d should not be affected by an empty response", i+1)
+		}
+	})
+
+	dynamicLimiter := NewDynamicLimiter(rdb, "dynamic-zero-byte", 2, 1024, time.Minute, keyBuilder)
+	t.Run("DynamicZeroByteRecordDoesNotCountRequest", func(t *testing.T) {
+		allowed, _, _, err := dynamicLimiter.RecordBytes(ctx, zeroByteRequest, 0)
+		require.NoError(t, err)
+		assert.True(t, allowed)
+
+		for i := 0; i < 2; i++ {
+			allowed, _, _, err := dynamicLimiter.AllowRequest(ctx, zeroByteRequest)
+			require.NoError(t, err)
+			assert.True(t, allowed, "request %d should not be affected by an empty response", i+1)
+		}
+	})
 
 	// Create limiter with small limits for testing
 	limiter := NewDualLimiter(rdb, "test", 5, 1024, time.Second, keyBuilder)

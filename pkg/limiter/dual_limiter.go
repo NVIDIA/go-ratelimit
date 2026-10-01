@@ -70,10 +70,10 @@ func (dl *DualLimiter) GetByteLimit() int64 {
 // AllowRequest checks if a new request is allowed based on request count limit
 func (dl *DualLimiter) AllowRequest(ctx context.Context, r *http.Request) (bool, int64, int64, error) {
 	k := dl.keyBuilder(r)
-	// ARGV: window_ms, limit, bytes (0 for request check)
+	// ARGV: window_ms, request_limit, byte_limit, bytes, mode
 	res, err := dl.lua.Run(ctx, dl.rdb,
 		[]string{dl.requestKey(k), dl.byteKey(k)},
-		dl.window.Milliseconds(), dl.requestLimit, dl.byteLimit, 0).Result()
+		dl.window.Milliseconds(), dl.requestLimit, dl.byteLimit, 0, "request").Result()
 	if err != nil {
 		return false, 0, 0, err
 	}
@@ -87,10 +87,10 @@ func (dl *DualLimiter) AllowRequest(ctx context.Context, r *http.Request) (bool,
 // RecordBytes records the bytes used for a request and checks if byte limit is exceeded
 func (dl *DualLimiter) RecordBytes(ctx context.Context, r *http.Request, bytes int64) (bool, int64, int64, error) {
 	k := dl.keyBuilder(r)
-	// ARGV: window_ms, limit, bytes (actual bytes for byte check)
+	// ARGV: window_ms, request_limit, byte_limit, bytes, mode
 	res, err := dl.lua.Run(ctx, dl.rdb,
 		[]string{dl.requestKey(k), dl.byteKey(k)},
-		dl.window.Milliseconds(), dl.requestLimit, dl.byteLimit, bytes).Result()
+		dl.window.Milliseconds(), dl.requestLimit, dl.byteLimit, bytes, "bytes").Result()
 	if err != nil {
 		return false, 0, 0, err
 	}
@@ -107,7 +107,8 @@ func (dl *DualLimiter) RecordBytes(ctx context.Context, r *http.Request, bytes i
 // ARGV[1] = window_ms
 // ARGV[2] = request limit
 // ARGV[3] = byte limit
-// ARGV[4] = bytes (0 for request check, actual bytes for byte recording)
+// ARGV[4] = bytes (0 for an empty response, actual bytes otherwise)
+// ARGV[5] = mode ("request" or "bytes")
 var dualSlidingLua = `
 local req_key = KEYS[1]
 local byte_key = KEYS[2]
@@ -115,6 +116,7 @@ local window_ms = tonumber(ARGV[1])
 local req_limit = tonumber(ARGV[2])
 local byte_limit = tonumber(ARGV[3])
 local bytes = tonumber(ARGV[4])
+local mode = ARGV[5]
 
 -- server time (ms)
 local t = redis.call('TIME')
@@ -143,8 +145,9 @@ local allowed = 0
 local remaining = 0
 local reset = 0
 
--- If bytes is 0, we're just checking request count
-if bytes == 0 then
+-- Request checks and byte recording are distinct operations. An empty response
+-- must not be mistaken for a request check.
+if mode == "request" then
     -- If req_limit is negative, request limiting is disabled
     if req_limit < 0 or req_count < req_limit then
         allowed = 1
@@ -156,7 +159,10 @@ if bytes == 0 then
     end
 else
     -- We're recording bytes
-    if byte_count + bytes <= byte_limit then
+    if bytes <= 0 then
+        allowed = 1
+        remaining = byte_limit - byte_count
+    elseif byte_count + bytes <= byte_limit then
         -- Add the bytes to the byte counter
         local byte_member = tostring(bytes) .. "-" .. tostring(now_ms) .. "-" .. tostring(math.random(1, 999999))
         redis.call('ZADD', byte_key, now_ms, byte_member)
@@ -169,7 +175,7 @@ else
 end
 
 -- If we're checking request count and allowed, add the request (unless disabled)
-if bytes == 0 and allowed == 1 and req_limit >= 0 then
+if mode == "request" and allowed == 1 and req_limit >= 0 then
     -- unique-ish member: ts-rand
     local req_member = tostring(now_ms) .. "-" .. tostring(math.random(1, 999999))
     redis.call('ZADD', req_key, now_ms, req_member)
