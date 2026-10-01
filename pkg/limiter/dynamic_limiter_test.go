@@ -24,10 +24,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/go-ratelimit/pkg/config"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/NVIDIA/go-ratelimit/pkg/config"
 )
 
 func TestDynamicLimiter_NewDynamicLimiter(t *testing.T) {
@@ -92,6 +92,36 @@ func TestDynamicLimiter_ExtractClientID(t *testing.T) {
 			name:     "Non-API key",
 			key:      "user:john.doe",
 			expected: "user:john.doe",
+		},
+		{
+			name:     "Client key",
+			key:      "client:john.doe",
+			expected: "john.doe",
+		},
+		{
+			name:     "Client key with route",
+			key:      "client:john.doe|route:/v1/users",
+			expected: "john.doe",
+		},
+		{
+			name:     "IP key",
+			key:      "ip:192.0.2.1",
+			expected: "192.0.2.1",
+		},
+		{
+			name:     "Header key",
+			key:      "header:x-api-key:ABC123",
+			expected: "ABC123",
+		},
+		{
+			name:     "Header key preserves colons in value",
+			key:      "header:authorization:Bearer token:with:colon",
+			expected: "Bearer token:with:colon",
+		},
+		{
+			name:     "Header fallback key",
+			key:      "header-fallback:192.0.2.1",
+			expected: "192.0.2.1",
 		},
 		{
 			name:     "Empty key",

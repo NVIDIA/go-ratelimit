@@ -23,8 +23,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/NVIDIA/go-ratelimit/pkg/config"
+	"github.com/redis/go-redis/v9"
 )
 
 // DynamicLimiter implements a rate limiter with per-client configurations
@@ -81,6 +81,24 @@ func extractClientID(key string) string {
 			return strings.TrimPrefix(parts[0], "apikey:")
 		}
 	}
+
+	// The built-in key builders prefix the client identifier to keep request
+	// keys from colliding across dimensions. Configuration keys use the plain
+	// client identifier, so remove those prefixes before looking up the config.
+	switch {
+	case strings.HasPrefix(key, "client:"):
+		return strings.SplitN(strings.TrimPrefix(key, "client:"), "|", 2)[0]
+	case strings.HasPrefix(key, "ip:"):
+		return strings.TrimPrefix(key, "ip:")
+	case strings.HasPrefix(key, "header-fallback:"):
+		return strings.TrimPrefix(key, "header-fallback:")
+	case strings.HasPrefix(key, "header:"):
+		parts := strings.SplitN(key, ":", 3)
+		if len(parts) == 3 {
+			return parts[2]
+		}
+	}
+
 	return key
 }
 
