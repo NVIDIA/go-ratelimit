@@ -74,3 +74,28 @@ func ClientIP(r *http.Request) string {
 	}
 	return host
 }
+
+// ExtractClientID returns the client identifier shared by the middleware and
+// dynamic limiters. It checks common identity headers and the client_id query
+// parameter before falling back to the request IP.
+func ExtractClientID(r *http.Request) string {
+	if clientID := r.Header.Get("X-Client-ID"); clientID != "" {
+		return clientID
+	}
+	if orgID := r.Header.Get("X-Scope-OrgID"); orgID != "" {
+		return orgID
+	}
+	if thanosTenant := r.Header.Get("THANOS-TENANT"); thanosTenant != "" {
+		return thanosTenant
+	}
+	if tenantID := r.Header.Get("X-Tenant-ID"); tenantID != "" {
+		return tenantID
+	}
+	if apiKey := r.Header.Get("X-API-Key"); apiKey != "" {
+		return apiKey
+	}
+	if clientID := r.URL.Query().Get("client_id"); clientID != "" {
+		return clientID
+	}
+	return ClientIP(r)
+}

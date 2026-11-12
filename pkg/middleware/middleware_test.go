@@ -29,9 +29,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/NVIDIA/go-ratelimit/pkg/config"
 	"github.com/NVIDIA/go-ratelimit/pkg/limiter"
+	"github.com/redis/go-redis/v9"
 )
 
 // =============================================================================
@@ -472,16 +472,20 @@ func TestDynamicRateLimitMiddleware(t *testing.T) {
 
 	// Set custom limits for specific clients
 	ctx := context.Background()
-	dl.SetClientConfig(ctx, "client:premium", config.ClientConfig{
+	if err := dl.SetClientConfig(ctx, "premium", config.ClientConfig{
 		RequestLimit: 20,
 		ByteLimit:    10000,
 		WindowSecs:   60,
-	})
-	dl.SetClientConfig(ctx, "client:basic", config.ClientConfig{
+	}); err != nil {
+		t.Fatalf("failed to set premium config: %v", err)
+	}
+	if err := dl.SetClientConfig(ctx, "basic", config.ClientConfig{
 		RequestLimit: 3,
-		ByteLimit:    500,
+		ByteLimit:    20,
 		WindowSecs:   60,
-	})
+	}); err != nil {
+		t.Fatalf("failed to set basic config: %v", err)
+	}
 
 	middleware := DynamicRateLimitMiddleware(dl)
 
@@ -497,24 +501,32 @@ func TestDynamicRateLimitMiddleware(t *testing.T) {
 		clientID     string
 		requests     int
 		expectDenied int
+		requestLimit string
+		byteLimit    string
 	}{
 		{
 			name:         "premium client high limit",
 			clientID:     "premium",
 			requests:     15,
 			expectDenied: 0,
+			requestLimit: "20",
+			byteLimit:    "10000",
 		},
 		{
 			name:         "basic client low limit",
 			clientID:     "basic",
 			requests:     5,
 			expectDenied: 2,
+			requestLimit: "3",
+			byteLimit:    "20",
 		},
 		{
 			name:         "unknown client default limit",
 			clientID:     "unknown",
 			requests:     7,
 			expectDenied: 2,
+			requestLimit: "5",
+			byteLimit:    "1000",
 		},
 	}
 
@@ -536,6 +548,17 @@ func TestDynamicRateLimitMiddleware(t *testing.T) {
 				rr := httptest.NewRecorder()
 
 				wrapped.ServeHTTP(rr, req)
+				if got := rr.Header().Get("RateLimit-Request-Limit"); got != tt.requestLimit {
+					t.Errorf("request limit header = %q, want %q", got, tt.requestLimit)
+				}
+				if got := rr.Header().Get("RateLimit-Bytes-Limit"); got != tt.byteLimit {
+					t.Errorf("byte limit header = %q, want %q", got, tt.byteLimit)
+				}
+				if tt.clientID == "basic" && i == 2 {
+					if got := rr.Header().Get("RateLimit-Bytes-Remaining"); got != "0" {
+						t.Errorf("remaining byte limit after three responses = %q, want 0", got)
+					}
+				}
 
 				if rr.Code == http.StatusTooManyRequests {
 					deniedCount++

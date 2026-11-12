@@ -18,9 +18,9 @@ package middleware
 import (
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/NVIDIA/go-ratelimit/pkg/limiter"
+	"github.com/NVIDIA/go-ratelimit/pkg/utils"
 )
 
 // DynamicRateLimitMiddleware enforces both request count and byte-based rate limiting with dynamic configs
@@ -119,56 +119,5 @@ func DynamicRateLimitMiddlewareWithLogger(dl limiter.RateLimiter, log Logger) fu
 // extractClientID extracts a client ID from the request for config lookup
 // Checks common headers used by various systems for tenant/client identification
 func extractClientID(r *http.Request) string {
-	// Check X-Client-ID header first (highest priority)
-	if clientID := r.Header.Get("X-Client-ID"); clientID != "" {
-		return clientID
-	}
-
-	// Check X-Scope-OrgID header (Grafana Loki)
-	// Return value as-is - the KeyFunc will add the "tenant-" prefix
-	if orgID := r.Header.Get("X-Scope-OrgID"); orgID != "" {
-		return orgID
-	}
-
-	// Check THANOS-TENANT header (Thanos)
-	// Return value as-is - the KeyFunc will add the "tenant-" prefix
-	if thanosTenant := r.Header.Get("THANOS-TENANT"); thanosTenant != "" {
-		return thanosTenant
-	}
-
-	// Check X-Tenant-ID header (generic multi-tenant systems)
-	// Return value as-is - the KeyFunc will add the "tenant-" prefix
-	if tenantID := r.Header.Get("X-Tenant-ID"); tenantID != "" {
-		return tenantID
-	}
-
-	// Check X-API-Key header (API key based systems)
-	if apiKey := r.Header.Get("X-API-Key"); apiKey != "" {
-		return apiKey
-	}
-
-	// Check query parameter
-	if clientID := r.URL.Query().Get("client_id"); clientID != "" {
-		return clientID
-	}
-
-	// Check X-Forwarded-For header (IP-based fallback)
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		// Take the first IP in the chain
-		if idx := strings.Index(xff, ","); idx != -1 {
-			return strings.TrimSpace(xff[:idx])
-		}
-		return strings.TrimSpace(xff)
-	}
-
-	// Fall back to remote address
-	if r.RemoteAddr != "" {
-		// Extract just the IP part (remove port)
-		if idx := strings.LastIndex(r.RemoteAddr, ":"); idx != -1 {
-			return r.RemoteAddr[:idx]
-		}
-		return r.RemoteAddr
-	}
-
-	return ""
+	return utils.ExtractClientID(r)
 }

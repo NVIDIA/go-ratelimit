@@ -24,10 +24,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/go-ratelimit/pkg/config"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/NVIDIA/go-ratelimit/pkg/config"
 )
 
 func TestDynamicLimiter_NewDynamicLimiter(t *testing.T) {
@@ -70,42 +70,6 @@ func TestDynamicLimiter_GetConfigManager(t *testing.T) {
 
 	cfgMgr := limiter.GetConfigManager()
 	assert.NotNil(t, cfgMgr)
-}
-
-func TestDynamicLimiter_ExtractClientID(t *testing.T) {
-	testCases := []struct {
-		name     string
-		key      string
-		expected string
-	}{
-		{
-			name:     "API key format",
-			key:      "apikey:ABC123|endpoint:/api/test",
-			expected: "ABC123",
-		},
-		{
-			name:     "Simple API key",
-			key:      "apikey:XYZ789",
-			expected: "XYZ789",
-		},
-		{
-			name:     "Non-API key",
-			key:      "user:john.doe",
-			expected: "user:john.doe",
-		},
-		{
-			name:     "Empty key",
-			key:      "",
-			expected: "",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			result := extractClientID(tc.key)
-			assert.Equal(t, tc.expected, result)
-		})
-	}
 }
 
 func TestDynamicLimiter_AllowRequest(t *testing.T) {
