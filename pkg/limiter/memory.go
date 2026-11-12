@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/go-ratelimit/pkg/config"
+	"github.com/NVIDIA/go-ratelimit/pkg/utils"
 )
 
 // MemoryLimiter implements a sliding-window rate limiter using in-memory storage.
@@ -121,11 +122,6 @@ func (ml *MemoryLimiter) cleanup() {
 	}
 }
 
-// extractClientID extracts the client identifier from the key
-func (ml *MemoryLimiter) extractClientID(key string) string {
-	return extractClientID(key) // Reuse the existing function
-}
-
 // GetClientConfig returns the current config for a client
 func (ml *MemoryLimiter) GetClientConfig(_ context.Context, clientID string) (config.ClientConfig, error) {
 	ml.mu.RLock()
@@ -164,7 +160,7 @@ func (ml *MemoryLimiter) AllowRequest(ctx context.Context, r *http.Request) (boo
 	k := ml.keyBuilder(r)
 
 	// Extract client ID for config lookup
-	clientID := ml.extractClientID(k)
+	clientID := utils.ExtractClientID(r)
 
 	// Get client-specific config
 	cfg, _ := ml.GetClientConfig(ctx, clientID)
@@ -234,7 +230,7 @@ func (ml *MemoryLimiter) RecordBytes(ctx context.Context, r *http.Request, bytes
 	k := ml.keyBuilder(r)
 
 	// Extract client ID for config lookup
-	clientID := ml.extractClientID(k)
+	clientID := utils.ExtractClientID(r)
 
 	// Get client-specific config
 	cfg, _ := ml.GetClientConfig(ctx, clientID)
@@ -302,7 +298,7 @@ func (ml *MemoryLimiter) GetCurrentUsage(ctx context.Context, r *http.Request) (
 	k := ml.keyBuilder(r)
 
 	// Extract client ID for config lookup
-	clientID := ml.extractClientID(k)
+	clientID := utils.ExtractClientID(r)
 
 	// Get client-specific config
 	cfg, _ := ml.GetClientConfig(ctx, clientID)

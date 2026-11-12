@@ -23,8 +23,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/NVIDIA/go-ratelimit/pkg/config"
+	"github.com/NVIDIA/go-ratelimit/pkg/utils"
+	"github.com/redis/go-redis/v9"
 )
 
 // DynamicLimiter implements a rate limiter with per-client configurations
@@ -72,25 +73,13 @@ func (dl *DynamicLimiter) GetConfigManager() *config.ConfigManager {
 	return dl.cfgManager
 }
 
-// extractClientID extracts the client identifier from the key
-func extractClientID(key string) string {
-	// Extract API key from the composite key
-	if strings.HasPrefix(key, "apikey:") {
-		parts := strings.Split(key, "|")
-		if len(parts) > 0 {
-			return strings.TrimPrefix(parts[0], "apikey:")
-		}
-	}
-	return key
-}
-
 // AllowRequest checks if a new request is allowed based on client-specific config
 func (dl *DynamicLimiter) AllowRequest(ctx context.Context, r *http.Request) (bool, int64, int64, error) {
 	// Get the key for this request
 	k := dl.keyBuilder(r)
 
 	// Extract client ID for config lookup
-	clientID := extractClientID(k)
+	clientID := utils.ExtractClientID(r)
 
 	// Get client-specific config
 	cfg, err := dl.cfgManager.GetConfig(ctx, clientID)
@@ -126,7 +115,7 @@ func (dl *DynamicLimiter) RecordBytes(ctx context.Context, r *http.Request, byte
 	k := dl.keyBuilder(r)
 
 	// Extract client ID for config lookup
-	clientID := extractClientID(k)
+	clientID := utils.ExtractClientID(r)
 
 	// Get client-specific config
 	cfg, err := dl.cfgManager.GetConfig(ctx, clientID)
@@ -169,7 +158,7 @@ func (dl *DynamicLimiter) ResetClientConfig(ctx context.Context, clientID string
 func (dl *DynamicLimiter) GetCurrentUsage(ctx context.Context, r *http.Request) (int64, error) {
 	k := dl.keyBuilder(r)
 	byteKey := dl.byteKey(k)
-	clientID := extractClientID(k)
+	clientID := utils.ExtractClientID(r)
 
 	// Get client config to get window duration
 	cfg, _ := dl.cfgManager.GetConfig(ctx, clientID)

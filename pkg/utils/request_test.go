@@ -21,6 +21,60 @@ import (
 	"testing"
 )
 
+func TestExtractClientID(t *testing.T) {
+	tests := []struct {
+		name     string
+		header   string
+		value    string
+		url      string
+		remote   string
+		expected string
+	}{
+		{
+			name:     "client ID header takes precedence",
+			header:   "X-Client-ID",
+			value:    "header-client",
+			url:      "/test?client_id=query-client",
+			remote:   "192.0.2.1:1234",
+			expected: "header-client",
+		},
+		{
+			name:     "query parameter",
+			url:      "/test?client_id=query-client",
+			remote:   "192.0.2.1:1234",
+			expected: "query-client",
+		},
+		{
+			name:     "forwarded IP fallback",
+			header:   "X-Forwarded-For",
+			value:    "198.51.100.2, 192.0.2.1",
+			url:      "/test",
+			remote:   "192.0.2.1:1234",
+			expected: "198.51.100.2",
+		},
+		{
+			name:     "remote IP fallback",
+			url:      "/test",
+			remote:   "192.0.2.1:1234",
+			expected: "192.0.2.1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tt.url, nil)
+			req.RemoteAddr = tt.remote
+			if tt.header != "" {
+				req.Header.Set(tt.header, tt.value)
+			}
+
+			if got := ExtractClientID(req); got != tt.expected {
+				t.Errorf("ExtractClientID() = %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestKeyByClientID(t *testing.T) {
 	tests := []struct {
 		name     string
